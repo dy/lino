@@ -19,7 +19,7 @@ Project is early experimental stage, design decisions must be consolidated.
 ?:                            # condition, switch
 x[i] x[]                      # member access, length
 a..b a.. ..b ..               # ranges
-|> #                          # pipe/loop/map, topic reference
+|> $                          # pipe/loop/map, topic reference
 ./ ../ .../                   # continue/skip, break/stop, root return
 >< <>                         # inside, outside
 -< -/ -*                      # clamp, normalize, lerp
