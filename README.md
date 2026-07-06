@@ -12,35 +12,37 @@ Project is early experimental stage, design decisions must be consolidated.
 # Operators
 + - * / % -- ++               # arithmetical (float)
 ** %% //                      # power, unsigned mod, flooring div
-& | ^ ~ >> <<                 # binary (integer)
-<<< >>>                       # rotate left, right
-&& || !                       # logical
-> >= < <= == !=               # comparisons (boolean)
-?:                            # condition, switch
+& | ^ ~ >> << >>>             # binary (integer), >>> unsigned as in JS
+<<<                           # rotate left
+&& || !                       # logical: &&, || return operand, as in JS
+> >= < <= == !=               # comparisons (0 / 1)
+? : ?:                        # condition, coalesce
 x[i] x[]                      # member access, length
-a..b a.. ..b ..               # ranges
-|> #                          # pipe/loop/map, topic reference
-./ ../ .../                   # continue/skip, break/stop, root return
+a..b a.. ..b ..               # ranges, bind tighter than arithmetic
+|> $                          # loop/pipe, topic (current element)
+./ ../ .../                   # exit block, parent block (loop), function
 >< <>                         # inside, outside
 -< -/ -*                      # clamp, normalize, lerp
+;; #                          # defer (run after return), comment
 
 # Numbers
 16, 0x10, 0o755, 0b0;         # int, hex, oct or binary
-16.0, .1, 2e-3;               # float
-π, ∞;                         # constants
-1k=1000; 1s=44100; 1m=60s;    # units
+16.0, .1, 2e-3;               # float (e is exponent, not a unit)
+π, ∞;                         # constants, usable as units: 2π
+1k=1000; 1s=44100; 1m=60s;    # units: define once, suffix numbers
 10.1k, 2π, 1m30s;             # 10100, 6.283..., 66150
 
 # Variables
 foo=1, bar=2.0;               # declare vars
-AbC, $0, Δx, x_1;             # names permit alnum, unicodes, _$@
-foo == Foo, bar == bAr;       # case-insensitive
+AbC, Δx, x_1;                 # names: alnum, unicode, _ (case-sensitive)
 default=1, eval=fn, else=0;   # no reserved words
 true = 0b1, false = 0b0;      # eg: alias bools
 inf = 1/0, nan = 0/0;         # eg: alias infinity, NaN
+x = 1; f() = (x * 2);         # globals are readable anywhere
+g() = (x = 2; x);             # assignment in fn makes a local (as python)
 
 # Ranges
-0..10;                        # from 1 to 9 (10 exclusive)
+0..10;                        # 0 to 9 (10 exclusive)
 0.., ..10, ..;                # open ranges
 10..1;                        # reverse range
 1.08..108.0;                  # float range
@@ -54,14 +56,14 @@ a -* 0..10, a -/ 0..10;       # lerp(a, 0, 10), normalize(a, 0, 10)
 
 # Groups
 (a,b,c) = (1,2,3);            # assign: a=1, b=2, c=3
-(a,b) = (b,a);                # swap
+(a,b) = (b,a);                # swap: rhs is stashed, then assigned left-to-right
 (a,b,c) = d;                  # duplicate: a=d, b=d, c=d
 (a,,b) = (c,d,e);             # skip: a=c, b=e
-(a,b) + (c,d);                # group binary: a+c, b+d
+(a,b) + (c,d);                # group ops distribute: a+c, b+d
 (a, b, c)++;                  # group unary: a++, b++, c++
 (a,b)[1] = c[2,3];            # props: a[1]=c[2], b[1]=c[3]
 (a,..,z) = (1,2,3,4);         # pick: a=1, z=4
-a = (b,c,d);                  # pick first: a=b; see loops
+a = (b,c,d);                  # positions align: a=b, rest dropped (≠ js comma)
 (a,(b,(c))) == (a,b,c);       # groups are always flat
 
 # Arrays
@@ -80,6 +82,8 @@ m[2..] = (1, 2..4, n[1..3]);  # set multiple values from offset 2
 m[1,2] = m[2,1];              # swap
 m[0..] = m[-1..];             # reverse
 m[0..] = m[1..,0];            # rotate
+[1, 2] + [3];                 # concat [1,2,3]: array ops act on the value
+[1, 2] * 3;                   # repeat [1,2,1,2,1,2] (groups distribute instead)
 
 # Strings
 hi="Hello";                   # creates static array
@@ -88,31 +92,39 @@ string[1, 3..5, -2];          # pick elements: 'e', 'lo', 'd'
 string[0..5];                 # substring: 'Hello'
 string[-1..0];                # reversed: '!dlrow ,olleH'
 string[];                     # length: 13
+"a" + "b";                    # concat: "ab"
+"a" * 3;                      # repeat: "aaa"
 
 # Conditions
 a ? b : c;                    # if a then b else c
-a ? b;                        # if a then b (else 0)
-a ?: b;                       # if (a then 0) else b
-val = (                       # switch
+a ? b;                        # if a then b (statement, no value)
+x = a ? b;                    # error: value position needs else
+a && b;                       # b if a, else 0 - fine in sums
+a ?: b;                       # a, unless a is nan - then b (as js ??)
+x = arg ?: 0;                 # eg: default for omitted arg
+val = (                       # switch: exit block with a value
   a == 1 ? ./1;               # if a == 1 then val = 1
   a >< 2..4 ? ./2;            # if a in 2..4 then val = 2
   3                           # otherwise 3
 );
-a ? ./b;                      # early return: if a then return b
+a ? ./b;                      # exit block with b: in fn body = return
 
 # Loops
 (a, b, c) |> f($);            # for each item in a, b, c do f(item)
-(i = 10..) |> (               # descend over range
-  i < 5 ? ./a;                # if item < 5 skip (continue)
-  i < 0 ? ../a;               # if item < 0 stop (break)
+x[..] |> $ *= 2;              # $ over lvalue range is a writable slot: map in place
+x[..] |> $ = lpf($, 500, 1);  # process block through stateful fn
+y = x |> f($) |> g($);        # scalar is a sequence of one: y = g(f(x))
+(i = 10..) |> (               # named binding (parens required), descend over range
+  i < 5 ? ./;                 # skip iteration (continue)
+  i < 0 ? ../;                # exit loop (break)
 );
-x[..] |> f($) |> g($);        # pipeline sequence
-(i = 0..w) |> (               # nest iterations
+(i = 0..w) |> (               # nest iterations: name outer, $ is innermost
   (j = 0..h) |> f(i, j);      # f(x,y)
 );
-((a,b) = 0..10) |> a+b;       # iterate pairs
-(x,,y) = (a,b,c) |> $ * 2;    # capture result x = a*2, y = c*2;
-.. |> i < 10 ? i++ : ../;     # while i < 10 i++
+(x,,y) = (a,b,c) |> $ * 2;    # capture result: x = a*2, y = c*2
+.. |> i < 10 ? i++ : ../;     # while i < 10: i++
+s = 0; xs[..] |> s += $;      # fold: accumulate through the loop
+m = [0..9 |> ($ <> 3..6 ? ./; $)]; # filter: ./ emits nothing
 
 # Functions
 double(n) = n*2;              # define a function
@@ -124,7 +136,7 @@ times(3,2);                   # 6
 times(4), times(,5);          # 4, 5: optional, skipped arg
 dup(x) = (x,x);               # return multiple
 (a,b) = dup(b);               # destructure
-a,b; x()=(a=1;b=1); x();      # first expr declares locals, last returns
+x() = (a=1, b=2; a+b);        # assigned names are locals, last statement returns
 fn() = ( x ;; log(x) );       # defer: log(x) after returning x
 f(a, cb) = cb(a[0]);          # array, func args
 
@@ -134,7 +146,7 @@ a(), a();                     # 0, 1
 a.i = 0;                      # reset state
 *a1 = a;                      # clone function
 a(), a(); a1(), a1();         # 0, 1; 0, 1;
-f() = ( *i=0;; i++; ... );    # couples with defer
+f() = ( *i=0;; i++; i );      # with defer: returns i, then increments
 
 # Export
 x, y, z;                      # exports last statement
@@ -150,10 +162,10 @@ Amplify k-rate block of samples.
 
 ```
 gain(
-  block,                          # block is a array argument
-  volume -< 0..100                # volume is limited to 0..100 range
+  block,                          # block is an array argument
+  volume -< 0..100                # volume is clamped to 0..100 range
 ) = (
-  ..block[] |> block[$] *= volume;
+  block[..] |> $ *= volume;       # $ is a writable slot: map in place
 );
 
 gain([0..5 * 0.1], 2);            # 0, .2, .4, .6, .8, 1
@@ -168,9 +180,8 @@ gain([0..5 * 0.1], 2);            # 0, .2, .4, .6, .8, 1
 A-rate (per-sample) biquad filter processor.
 
 ```
-1pi = 3.1415;
 1s = 44100;
-1k = 10000;
+1k = 1000;
 
 lpf(
   x0,
@@ -180,22 +191,24 @@ lpf(
   # filter state
   *(x1, y1, x2, y2) = 0;
 
-  # shift state
+  # shift state after return (defer)
   ;; (x1, x2) = (x0, x1), (y1, y2) = (y0, y1);
 
   # lpf formula
-  w = 2pi * freq / 1s;
+  w = 2π * freq / 1s;
   (sin_w, cos_w) = (sin(w), cos(w));
-  a = sin_w / (2.0 * Q);
+  α = sin_w / (2.0 * Q);
 
-  (b0, b1, b2) = ((1.0 - cos_w) / 2.0, 1.0 - cos_w, b0);
-  (a0, a1, a2) = (1.0 + a, -2.0 * cos_w, 1.0 - a);
+  (b0, b1) = ((1.0 - cos_w) / 2.0, 1.0 - cos_w);
+  b2 = b0;                      # in-group (..., b0) would stash the old b0 (0)
+  (a0, a1, a2) = (1.0 + α, -2.0 * cos_w, 1.0 - α);
   (b0, b1, b2, a1, a2) /= a0;
 
   y0 = b0*x0 + b1*x1 + b2*x2 - a1*y1 - a2*y2
 );
 
-[0, .1, .3, ...] |> lpf($, 108, 5);
+samples = [0, .1, .3, .5, .3, .1];
+samples[..] |> $ = lpf($, 108, 5);  # filter block in place
 ```
 
 </details>
@@ -206,55 +219,54 @@ lpf(
 Generates ZZFX's [coin sound](https://codepen.io/KilledByAPixel/full/BaowKzv) `zzfx(...[,,1675,,.06,.24,1,1.82,,,837,.06])`.
 
 ```
-1pi = 3.1415;
 1s = 44100;
 1ms = 1s / 1000;
 
 # waveform generators
 oscillator = [
-  saw(phase) = (1 - 4 * abs( round(phase/2pi) - phase/2pi )),
+  tri(phase) = 1 - 4 * abs( round(phase/2π) - phase/2π ),
   sine(phase) = sin(phase)
 ];
 
-# applies adsr curve to sequence of samples
+# per-sample adsr envelope
 adsr(
   x,
-  a -< 1ms..,                   # prevent click
-  d,
-  (s, sv=1),                    # optional group-argument
-  r
+  a -< 1ms..,                   # attack, min 1ms to prevent click
+  d, s, r,                      # decay, sustain, release
+  sv = 1                        # sustain volume
 ) = (
-  *i = 0 ;; i++;                # internal counter
+  *i = 0;; i++;                 # internal counter
   t = i / 1s;
-
   total = a + d + s + r;
 
   t >= total ? 0 : (
     t < a ? t/a :               # attack
     t < a + d ?                 # decay
     1-((t-a)/d)*(1-sv) :        # decay falloff
-    t < a  + d + s ?            # sustain
+    t < a + d + s ?             # sustain
     sv :                        # sustain volume
-    (total - t)/r * sv
+    (total - t)/r * sv          # release
   ) * x
 );
 
-# curve effect
-curve(x, amt -< 0..10 = 1.82) = (sign(x) * abs(x)) ** amt;
+# waveshaper
+curve(x, amt = 1.82 -< 0..10) = sign(x) * abs(x) ** amt;
 
-# coin = triangle with pitch jump, produces block
+# coin = triangle with pitch jump, one sample per call
 coin(freq=1675, jump=freq/2, delay=0.06, shape=0) = (
-  *out=[..1024];
-  *i=0;;i++;
-  *phase = 0;; phase += (freq + (t > delay && jump)) * 2pi / 1s;
+  *i = 0;; i++;
+  *phase = 0;; phase += (freq + (t > delay && jump)) * 2π / 1s;
   t = i / 1s;
 
-  # generate samples block, apply adsr/curve, write result to out
-  ..1024  |> oscillator[shape](phase)
-      |> adsr($, 0, 0, .06, .24)
-      |> curve($, 1.82)
-      |> out[..] = $;
-)
+  oscillator[shape](phase)      # scalar pipe: each stage rebinds $
+    |> adsr($, 0, 0, .06, .24)
+    |> curve($, 1.82)
+);
+
+# render a block
+out = [..1024];
+out[..] |> $ = coin();
+out
 ```
 
 </details>
@@ -271,30 +283,28 @@ coin(freq=1675, jump=freq/2, delay=0.06, shape=0) = (
 
 1s = 44100;
 
-(a1,a2,a3,a4) = (1116,1188,1277,1356);
-(b1,b2,b3,b4) = (1422,1491,1557,1617);
-(p1,p2,p3,p4) = (225,556,441,341);
+*(c1,c2,c3,c4,c5,c6,c7,c8) = comb;    # 8 comb instances: clones own state
+*(p1,p2,p3,p4) = allpass;             # 4 allpass instances
 
-# TODO: stretch
+combs = [c1,c2,c3,c4,c5,c6,c7,c8];
+sizes = [1116,1188,1277,1356,1422,1491,1557,1617];
 
 reverb(input, room=0.5, damp=0.5) = (
-  *combs_a = a0,a1,a2,a3 | a: stretch(a),
-  *combs_b = b0,b1,b2,b3 | b: stretch(b),
-  *aps = p0,p1,p2,p3 | p: stretch(p);
+  wet = 0;
+  0..sizes[] |> wet += combs[$](input, sizes[$], room, damp);  # parallel combs, folded by sum
 
-  combs = (
-    (combs_a | x -> comb(x, input, room, damp) |: (a,b) -> a+b) +
-    (combs_b | x -> comb(x, input, room, damp) |: (a,b) -> a+b)
-  );
-
-  (combs, aps) | (input, coef) -> p + allpass(p, coef, room, damp)
+  wet |> p1($, 225, room)             # series allpasses: scalar pipe chain
+      |> p2($, 556, room)
+      |> p3($, 441, room)
+      |> p4($, 341, room)
 );
 ```
 
 Features:
 
-* _multiarg pipes_ − pipe can consume groups. Depending on arity of target it can act as convolver: `a,b,c | (a,b) -> a+b` becomes  `(a,b | (a,b)->a+b), (b,c | (a,b)->a+b)`.
-* _fold operator_ − `a,b,c |: fn` acts as `reduce(a,b,c, fn)`, provides efficient way to reduce a group or array to a single value.
+* _function clones_ − `*c1 = comb` copies a function together with its state: per-instance delay lines without objects.
+* _accumulator fold_ − `0..sizes[] |> wet += ...` reduces a sequence with a plain loop, no fold operator needed.
+* _scalar pipe_ − a scalar is a sequence of one: `wet |> p1($, ...)` is `p1(wet, ...)`, stages chain like series effects.
 
 </details>
 
@@ -307,19 +317,17 @@ Features:
 Transpiled floatbeat/bytebeat song:
 
 ```
-<math#asin,sin,pi>;
-
 1s = 44100;
 
 fract(x) = x % 1;
 mix(a, b, c) = (a * (1 - c)) + (b * c);
-tri(x) = 2 * asin(sin(x)) / pi;
+tri(x) = 2 * asin(sin(x)) / π;
 noise(x) = sin((x + 10) * sin((x + 10) ** (fract(x) + 10)));
 melodytest(time) = (
-  melodyString = "00040008",
+  melodyString = "00040008";
   melody = 0;
 
-  0..5 <| (
+  0..5 |> (
     melody += tri(
       time * mix(
         200 + ($ * 900),
@@ -330,23 +338,24 @@ melodytest(time) = (
   );
 
   melody
-)
+);
 hihat(time) = noise(time) * (1 - fract(time * 4)) ** 10;
 kick(time) = sin((1 - fract(time * 2)) ** 17 * 100);
-snare(time) = noise(floor((time) * 108000)) * (1 - fract(time + 0.5)) ** 12;
-melody(time) = melodytest(time) * fract(time * 2) ** 6 * 1;
+snare(time) = noise(floor(time * 108000)) * (1 - fract(time + 0.5)) ** 12;
+melody(time) = melodytest(time) * fract(time * 2) ** 6;
 
 song() = (
-  *t=0;; t++; time = t / 1s;
+  *t=0;; t++;
+  time = t / 1s;
   (kick(time) + snare(time)*.15 + hihat(time)*.05 + melody(time)) / 4
 )
 ```
 
 Features:
 
-* _loop operator_ − `cond <| expr` acts as _while_ loop, calling expression until condition holds true. Produces sequence as result.
-* _string literal_ − `"abc"` acts as array with ASCII codes.
-* _length operator_ − `items[]` returns total number of items of either an array, group, string or range.
+* _string literal_ − `"abc"` is a static array of char codes.
+* _length operator_ − `items[]` returns number of items of an array, group, string or range.
+* _stdlib_ − core math (`sin`, `asin`, `floor`, `abs`, ...) is available without imports.
 
 
 </details>
@@ -444,8 +453,7 @@ _Piezo_ attempts to provide a common layer. It is also a personal take in langua
 * _Minimal_: maximal expressivity with short syntax.
 * _Intuitive_: common base, familiar patterns, visual hints.
 * _No keywords_: chars for vars, symbols for operators, real i18l code.
-* _Case-agnostic_: case changes don't break code (eg. `sampleRate` vs `samplerate`).
-* _Space-agnostic_: spaces and newlines can be removed or added freely.
+* _Space-agnostic_: spacing changes don't change meaning (strings, line comments aside).
 * _Explicit_: no implicit globals, no wildcard imports, no hidden file conventions (eg. `package.json`).
 * _Inferred types_: derived by usage, focus on logic over language.
 * _Normalized AST_: no complex parsing rules, just unary, binary or n-ary operators.
@@ -466,4 +474,4 @@ _Piezo_ attempts to provide a common layer. It is also a personal take in langua
 
 * @stagas for initial drive & ideas
 
-<p align=center><a href="https://github.com/krsnzd/license/">🕉</a></p>
+<p align=center><a href="https://github.com/krsnzd/license/">ॐ</a></p>

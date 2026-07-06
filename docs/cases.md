@@ -58,3 +58,4 @@
 * [ogg decoder](https://en.wikipedia.org/wiki/HTML5_audio#Supported_audio_coding_formats)
 * [comodoro scene database](https://csdb.dk/)
 * https://sfbgames.itch.io/chiptone
+* If functions could talk fb post

@@ -1,3 +1,23 @@
+## 0.2 — consolidation (2026-07)
+
+Docs are consolidated to one dialect (see r&d.md "Consolidation 2026-07"). Impl migration:
+
+* [ ] comments: `;;` → `#`
+* [ ] defer: `^` → `;;`
+* [ ] exits: `/x` → block-relative `./ ../ .../` (exit block / loop / function)
+* [ ] topic: `#` → `$`; remove `$`, `@` from identifier chars
+* [ ] writable topic over lvalue ranges: `x[..] |> $ *= 2` (slot semantics, in-place map)
+* [ ] `./` emits nothing in comprehensions: `[xs |> (cond ? ./; $)]` (filter)
+* [ ] one-armed `?` = statement only, error in value position (currently yields 0); `a ?: b` = nan-coalesce binary
+* [ ] scoping: python rule — assignment in fn body makes a local; globals read-only in fns (update vars/loops tests: `c++` case)
+* [ ] case-sensitive identifiers (drop case-folding plans)
+* [ ] `>>>` = unsigned right shift (as JS); `<<<` = rotl; drop rotr
+* [ ] units: predefine π/∞; reject unit defs colliding with number grammar (`1e=`, `1x=`, ...)
+* [ ] stdlib: core math without imports (sin, cos, asin, floor, round, abs, sign, sqrt, min, max, exp, log, rand, ...)
+* [ ] precedence: document table; `|>`/`?` bodies extend right
+* [ ] readme test covers ALL examples (gain, biquad, zzfx, freeverb, floatbeat) — gate against dialect drift
+* [ ] backend: spike piezo → jz AST lowering (gain, biquad, zzfx), diff vs direct WAT; adopt at parity (see r&d)
+
 ## 0
 
 * [x] make subscript generate lispy tree (wasm, wat, js, ast targets are possible)
@@ -49,7 +69,7 @@
 * [ ] range iterator via pipe
 * [ ] convert all string instructions to builder calls
 * [ ] list comprehension
-* [ ] make use of `./`, `../` for loops only (not parent)\
+* [x] ~~make use of `./`, `../` for loops only (not parent)~~ → block-relative exits (see consolidation)
 * [ ] all readmes test
 * [ ] case-insensitive variables
 * [ ] strings

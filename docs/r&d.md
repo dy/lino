@@ -1736,7 +1736,7 @@
   - requires strings to implement dynamic access `x['first']`
   - some arrays have aliases, others don't: we're not going to make aliases dynamic
 
-## [ ] Conditions:
+## [x] Conditions: -> `a ? b : c`; one-armed `a ? b` is a statement (no value); `a ?: b` is nan-coalesce (see Consolidation 2026-07)
 
   1. `a ? b` returning b or 0, elvis: `a ?: b`
     + organic extension of ternary `a ? b`, `a ?: b`.
@@ -2022,7 +2022,7 @@
       + doesn't reinvent the meaning of `:` & create clutter
       + easier to find-all loops, opposed to mixup of `?:` and `:`
 
-## [ ] Arrays: Overwrite method
+## [x] Arrays: Overwrite method -> writable topic: `x[..] |> $ *= 2` (see Consolidation 2026-07)
 
   1. `a[..] |>= _+1`
     - new operator
@@ -3650,7 +3650,7 @@
   ~- we can do that via just returns
   - Errors make program syntax case-sensitive
 
-## [ ] Variables: Case-sensitive? -> likely yes: AbB/ABb, x1/X1, ~~@math.E/@math.e~~, export names, import names, constants, strings, atoms
+## [x] Variables: Case-sensitive? -> yes, case-sensitive: unicode folding is locale-dependent, π ≠ Π, js export names are case-sensitive anyway (Consolidation 2026-07)
   * should not be too smart, should be very simple
 
   0. Case-insensitive
@@ -6120,7 +6120,7 @@
     + covers loops
     - at odds with group ops like `a + (b,c,d)`
 
-### [ ] Loops: `=` and `|>` precedence
+### [x] Loops: `=` and `|>` precedence -> `|>` body extends right; `a = b |> c` assigns loop result; named binding needs parens `(i = 0..) |> ...`
 
   1. `a=b |> c`
     - unlike JS
@@ -6301,3 +6301,97 @@ let gen = [
 ```
   - that creates potential for infinite functional recursion, which is hell: we only need 2 levels
 + that creates difficulty figuring out type of input argument, since that can be a function
+
+# Consolidation 2026-07
+
+One review pass closed contradictions between README, r&d and impl. README is canonical single dialect now; impl migration is tracked in todo.md (0.2). Decisions:
+
+## [x] Dialect: comments `#`, defer `;;`, topic `$` -> README dialect wins over impl
+  * impl lags: `;;` comments, `^` defer, `/x` return, `#` topic — to migrate
+  + `#` comment: the most common scripting convention (python, ruby, shell), frees `;;`
+  + `;;` defer: positional "after the sequence" meaning, mirrors `for(;;)`
+  + `$` topic: insertion/replacement convention (regex, shell), scans well, unused as operator
+  - `#` can no longer be topic or part of names
+
+## [x] Exits are block-relative paths -> `./` exits current block, `../` parent block (loop), `.../` function root
+  + one rule instead of three keywords: path depth = scope depth
+  + in a loop body: `./` = continue, `../` = break; in a fn body: `./x` returns x
+  + `val = (a ? ./1; b ? ./2; 3)` gives keyword-free switch
+  * retires impl's `/x` return; supersedes "no block return" above
+
+## [x] Conditions & nan: minimize nan; booleans are 0/1 -> one-armed `?` has no value; nan only from IEEE math and omitted args
+  * no boolean type: comparisons and `!` yield 0/1 (i32 as impl detail); `&&`/`||` pass operands
+  * `a ? b` is a statement (or exit guard `a ? ./x`); in value position it is a compile error — write `a ? b : c` or `a && b`
+    + closes `a ? b` -> 0 (old README) vs nan (older r&d): neither — no implicit value at all
+    + bytebeat sum habit stays truthful: `(cond && x) + y`
+  * nan is never created by control flow; it only flows from IEEE754 math (`0/0`, `∞-∞`) and omitted args (`f(,5)`)
+  * `a ?: b` (as js `??`) guards exactly those two sources: `x = arg ?: 0`
+  + `?:` binary was never implemented (only ternary sugar) — no impl conflict
+
+## [x] Logical ops return operands (js style) -> `a && b`, `a || b` pass values, comparisons return 0/1
+  * matches impl (`1.2 && 0.2` -> 0.2) and the zzfx idiom `freq + (t > delay && jump)`
+
+## [x] Group assignment: rhs is stashed, then assigned left-to-right
+  + stashing is what makes `(a,b) = (b,a)` swap and `(x1,x2) = (x0,x1)` state shift work
+  + left-to-right writes define the repeated-target edge: `(a,a) = (1,2)` -> a=2
+  - `(b0,b1,b2) = (..., b0)` stashes the OLD b0 — biquad example fixed to separate `b2 = b0` (rbj lpf needs the new b0)
+  * `a = (b,c,d)` aligns positions: a=b, rest dropped; NB `a = b,c,d` parses as `(a=b),c,d`
+
+## [x] Scoping: python rule -> assignment in a fn body creates a local (whole body); globals are read-only in fns
+  * replaces "first expression declares locals" — position-dependent scope broke under edits
+  + keyword-free: read = global, write = local, `*` = persistent state, module level = globals
+  + instance state stays explicit: `*f2 = f` clone, `f.i = 0` reset
+  - impl change: tests mutating globals from fns (`fill()=(...;c++)`) must use `*c` state
+
+## [x] Identifiers: case-sensitive; chars = alnum + unicode + `_` -> case-agnostic principle dropped
+  + unicode case folding is locale-dependent (turkish i, ς/Σ) and a large table — fights minimal & i18n
+  + math needs π ≠ Π; js host exports are case-sensitive anyway
+  + `$` reserved for topic, `@` reserved — both removed from name chars
+
+## [x] Shifts: `>>>` is unsigned right shift (as js), `<<<` is rotate left, rotate right dropped
+  + bytebeat/js corpus compatibility: pasted formulas must not silently change meaning
+  + rotr n == rotl (32-n); optimizer may emit i32.rotr
+
+## [x] Sequence doctrine: groups & ranges distribute, arrays & strings are values
+  * `(a,b) * 2` = a*2,b*2; `0..3 * 2` = 0,2,4 — per element
+  * `[1,2] * 3` repeats, `[1,2] + [3]` concats, same for strings (python-style)
+  + groups are N scalars (syntax sugar) — ops must distribute; arrays are one value (memory) — ops act on the whole
+
+## [x] Signatures: `name [= default] [-< range]`, group-args removed
+  * canonical order: `freq = 100 -< 1..10k` (default, then clamp)
+  * `(s, sv=1)` group-arg dropped: groups are flat, a parenthesized arg cannot bind sub-structure — flatten the signature
+
+## [x] Constants are units -> π, ∞ predefined both as globals and unit-suffixes (2π)
+  + one mechanism: π is predefined the same way `1s=44100` defines s
+  * number-literal grammar beats units: `2e-3` is a float; defining `1e=...`, `1x=...` etc is an error
+
+## [x] Stdlib: core math built in, no import -> sin cos tan asin acos atan abs floor ceil round sqrt sign min max exp log rand
+  + "runs without explanation": examples were importing `<math#sin>` inconsistently
+  * `<path#name>` imports remain for user modules and host functions
+
+## [x] Pipes/loops final algebra -> one operator `|>`, one topic `$`
+  * lhs yields a sequence; scalar = sequence of one (`a |> f($)` = `f(a)`); each stage rebinds `$`
+  * over an lvalue range `x[..]`, `$` is a writable slot: `x[..] |> $ *= k` maps in place ("!clever" option above, adopted)
+  * `[seq |> body]` collects emissions; `./` emits nothing (filter); loop in value position yields last body value
+  * fold = accumulator: `s=0; xs[..] |> s += $` — no fold operator
+  * `|>` body extends right: `x[..] |> $ = f($)` needs no parens; named binding does: `(i = 0..) |> ...`
+  * removed: `<|`, `|:` fold, multiarg/convolver pipes, pair iteration `((a,b) = 0..10) |>` — indices cover zip/windows: `..n |> f(l[$], r[$])`
+
+## [x] Ranges in index position -> open ranges are bounded by the array; negative start walks backward
+  * `m[0..]` forward, `m[-1..]` from last backward — legalizes reverse/rotate idioms
+
+## [x] Backend: compile piezo through jz -> retarget; direct WAT emitter retires at parity
+  + jz's model (f64 + inferred i32, linear memory, no GC/closures, static fns) is a superset of piezo semantics — every construct lowers mechanically:
+    groups -> scalars, ranges/pipes -> for loops, `*state` -> module globals (clone = duplicated decls), defer -> code motion, units/case -> lexical
+  + inherits the industrial 80%: type narrowing, escape analysis + arena (solves "dispose arrays once ref lost"), loop opts, auto-SIMD (audio blocks are lane-pure maps/reductions — jz's best case), self-host, wasm2c native path, bench gates
+  + lowered output is plain runnable JS: differential testing (node vs wasm), console debugging, profiling — for free
+  + piezo keeps domain knowledge at the front: clamps/ranges prove bounds -> unchecked access; emit modwrap only where unproven
+  + survivability: if piezo stalls, sources still lower to plain JS; jz gains a second front-end proving its IR
+  - direct emission only wins tight-kernel artifact size today — contribute size passes upstream instead
+  * target jz AST (both parse with subscript), not source text; emit jz source as debug artifact
+  * migration: lower gain/biquad/zzfx, diff behavior vs current WAT path, then switch CLI; `--wat` stays via jz
+
+## Still open (tracked, not blocking)
+  * strings: u8 vs f64 storage (see Strings above)
+  * full precedence table; documented facts: ranges bind tighter than arithmetic, `|>`/`?` bodies extend right, `,` binds looser than `=`
+  * error reporting; debug-mode trap for out-of-bounds access (release stays modwrap)
